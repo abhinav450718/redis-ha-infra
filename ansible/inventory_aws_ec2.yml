@@ -1,0 +1,10 @@
+plugin: aws_ec2
+regions:
+  - eu-east-1
+filters:
+  tag:Role: redis
+keyed_groups:
+  - key: tags.RoleType
+    prefix: ""
+hostnames:
+  - private-ip-address
