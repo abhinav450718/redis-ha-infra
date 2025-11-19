@@ -1,13 +1,5 @@
-- hosts: redis_master, redis_replica
+- name: Install Redis on all nodes
+  hosts: redis_nodes
   become: yes
-  pre_tasks:
-    - name: Ensure universe repo is enabled
-      apt_repository:
-        repo: "deb http://archive.ubuntu.com/ubuntu {{ ansible_distribution_release }} universe"
-        state: present
-    - name: Update apt cache
-      apt:
-        update_cache: yes
-
   roles:
     - geerlingguy.redis
