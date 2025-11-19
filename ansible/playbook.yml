@@ -1,62 +1,15 @@
----
-- name: Install and configure Redis on all nodes
-  hosts: redis_master:redis_replica
+- hosts: all
   become: yes
-  vars:
-    redis_bind_address: "0.0.0.0"
-    redis_port: 6379
-    master_ip: "{{ hostvars['redis_master'].ansible_host }}"
   tasks:
-
-    - name: Ensure python is installed
+    - name: Update apt cache
       apt:
-        name: python3
-        state: present
-      become: yes
+        update_cache: yes
 
-    - name: Install redis-tools (CLI)
+    - name: Install Redis tools
       apt:
         name: redis-tools
         state: present
-      become: yes
 
-    - name: Install Redis server
-      apt:
-        name: redis-server
-        state: present
-      become: yes
-
-    - name: Ensure Redis service is running
-      systemd:
-        name: redis-server
-        state: started
-        enabled: yes
-      become: yes
-
-    - name: Configure Redis to bind all interfaces
-      lineinfile:
-        path: /etc/redis/redis.conf
-        regexp: '^bind'
-        line: "bind {{ redis_bind_address }}"
-        state: present
-      notify: Restart Redis
-      become: yes
-
-    - name: Configure Redis replication on replica
-      when: inventory_hostname != 'redis_master'
-      block:
-        - name: Set master host in replica redis.conf
-          lineinfile:
-            path: /etc/redis/redis.conf
-            regexp: '^replicaof'
-            line: "replicaof {{ master_ip }} {{ redis_port }}"
-            state: present
-          notify: Restart Redis
-          become: yes
-
-  handlers:
-    - name: Restart Redis
-      systemd:
-        name: redis-server
-        state: restarted
-      become: yes
+    - name: Install Redis server (if master/replica)
+      include_role:
+        name: geerlingguy.redis
