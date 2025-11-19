@@ -11,7 +11,7 @@ output "redis_replica_private_ip" {
 }
 
 output "private_key_path" {
-  value = "${path.module}/redis_key.pem"
+  value = "${path.root}/redis_key.pem"
 }
 
 output "ssh_to_bastion" {
