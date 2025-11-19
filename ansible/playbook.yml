@@ -1,7 +1,10 @@
 - hosts: redis_master, redis_replica
   become: yes
-  vars_files:
-    - vars/main.yml
+  vars:
+    redis_package: redis-server
+    redis_package_state: present
+    redis_apt_update_cache: yes       # IMPORTANT: Update apt cache before installing
+    ansible_python_interpreter: /usr/bin/python3
 
   roles:
     - geerlingguy.redis
