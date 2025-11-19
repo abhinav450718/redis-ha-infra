@@ -17,5 +17,5 @@
     redis_bind: "0.0.0.0"
     redis_port: 6379
     redis_replication_role: "slave"
-    redis_master_host: "{{ hostvars[groups['redis_master'][0]].ansible_host }}"
+    redis_master_host: "{{ hostvars['redis_master'].ansible_host }}"
     redis_master_port: 6379
