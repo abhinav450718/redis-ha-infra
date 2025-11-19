@@ -2,45 +2,55 @@ provider "aws" {
   region = var.region
 }
 
+# Get latest Ubuntu AMI
 data "aws_ami" "ubuntu" {
   most_recent = true
   owners      = [var.ami_owner]
+
   filter {
     name   = "name"
     values = ["ubuntu/images/hvm-ssd/ubuntu-jammy-22.04-amd64-server-*"]
   }
 }
 
+# Network Module
 module "network" {
   source = "./modules/network"
-  # network module uses fixed CIDRs in earlier step; no variables necessary here (or map them if you want)
 }
 
-# Key creation (tls & aws_key_pair) handled in ssh.tf in root (already created)
-# Create security groups in root (so both modules reference same SGs)
+# -------------------------
+# Security Groups
+# -------------------------
+
+# Bastion Security Group
 resource "aws_security_group" "bastion_sg" {
-  name   = "bastion-sg"
-  vpc_id = module.network.db_vpc_id # module networking must export this, confirm earlier network module outputs
+  name        = "bastion-sg"
+  vpc_id      = module.network.db_vpc_id
   description = "bastion ssh sg"
+
   ingress {
     from_port   = 22
     to_port     = 22
     protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"] # demo; restrict to your IP for production
+    cidr_blocks = ["0.0.0.0/0"]
   }
+
   egress {
-  from_port   = 0
-  to_port     = 0
-  protocol    = "-1"
-  cidr_blocks = ["0.0.0.0/0"]
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = {
+    Name = "bastion-sg"
+  }
 }
 
-  tags = { Name = "bastion-sg" }
-}
-
+# DB / Redis SG
 resource "aws_security_group" "db_sg" {
-  name   = "db-sg"
-  vpc_id = module.network.db_vpc_id
+  name        = "db-sg"
+  vpc_id      = module.network.db_vpc_id
   description = "DB security group: redis inside VPC and SSH from bastion"
 
   ingress {
@@ -52,18 +62,28 @@ resource "aws_security_group" "db_sg" {
   }
 
   ingress {
-    from_port   = 22
-    to_port     = 22
-    protocol    = "tcp"
+    from_port       = 22
+    to_port         = 22
+    protocol        = "tcp"
     security_groups = [aws_security_group.bastion_sg.id]
-    description = "SSH from bastion"
+    description     = "SSH from bastion"
   }
 
-  egress { from_port=0; to_port=0; protocol="-1"; cidr_blocks=["0.0.0.0/0"] }
-  tags = { Name = "db-sg" }
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = {
+    Name = "db-sg"
+  }
 }
 
-# create bastion using module
+# -------------------------
+# Bastion Host Module
+# -------------------------
 module "bastion" {
   source        = "./modules/bastion"
   subnet_id     = module.network.public_subnet_id
@@ -73,7 +93,9 @@ module "bastion" {
   bastion_sg_id = aws_security_group.bastion_sg.id
 }
 
-# create redis master (module called once)
+# -------------------------
+# Redis Master
+# -------------------------
 module "redis_master" {
   source        = "./modules/redis"
   subnet_id     = module.network.private1_subnet_id
@@ -85,7 +107,9 @@ module "redis_master" {
   role_type     = "master"
 }
 
-# create redis replica (module called again)
+# -------------------------
+# Redis Replica
+# -------------------------
 module "redis_replica" {
   source        = "./modules/redis"
   subnet_id     = module.network.private2_subnet_id
