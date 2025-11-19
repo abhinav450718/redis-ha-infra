@@ -1,11 +1,3 @@
-variable "subnet_id" {}
-variable "ami_id" {}
-variable "instance_type" {}
-variable "key_name" {}
-variable "db_sg_id" {}
-variable "name" {}        # e.g. "redis-master" or "redis-replica"
-variable "role_type" {}   # e.g. "master" / "replica"
-
 resource "aws_instance" "redis" {
   ami                    = var.ami_id
   instance_type          = var.instance_type
@@ -19,14 +11,4 @@ resource "aws_instance" "redis" {
     Role     = "redis"
     RoleType = var.role_type
   }
-}
-
-output "id" {
-  value = aws_instance.redis.id
-}
-output "private_ip" {
-  value = aws_instance.redis.private_ip
-}
-output "name" {
-  value = var.name
 }
