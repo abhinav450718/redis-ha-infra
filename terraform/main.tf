@@ -1,5 +1,5 @@
 provider "aws" {
-  region = var.region
+  region = "sa-east-1"
 }
 
 # Get latest Ubuntu AMI
@@ -16,6 +16,15 @@ data "aws_ami" "ubuntu" {
 # Network Module
 module "network" {
   source = "./modules/network"
+
+  vpc_cidr             = "10.0.0.0/16"
+  public_subnet_cidr   = "10.0.0.0/24"
+  private1_subnet_cidr = "10.0.1.0/24"
+  private2_subnet_cidr = "10.0.2.0/24"
+
+  az_public   = "sa-east-1a"
+  az_private1 = "sa-east-1b"
+  az_private2 = "sa-east-1c"
 }
 
 # -------------------------
@@ -25,7 +34,7 @@ module "network" {
 # Bastion Security Group
 resource "aws_security_group" "bastion_sg" {
   name        = "bastion-sg"
-  vpc_id      = module.network.db_vpc_id
+  vpc_id      = module.network.vpc_id
   description = "bastion ssh sg"
 
   ingress {
@@ -50,7 +59,7 @@ resource "aws_security_group" "bastion_sg" {
 # DB / Redis SG
 resource "aws_security_group" "db_sg" {
   name        = "db-sg"
-  vpc_id      = module.network.db_vpc_id
+  vpc_id      = module.network.vpc_id
   description = "DB security group: redis inside VPC and SSH from bastion"
 
   ingress {
@@ -120,3 +129,6 @@ module "redis_replica" {
   name          = "redis-replica"
   role_type     = "replica"
 }
+
+
+
