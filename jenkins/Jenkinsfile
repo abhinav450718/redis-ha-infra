@@ -41,28 +41,36 @@ pipeline {
                     env.REDIS_MASTER_IP = sh(script: "cd terraform && terraform output -raw redis_master_private_ip", returnStdout: true).trim()
                     env.REDIS_REPLICA_IP = sh(script: "cd terraform && terraform output -raw redis_replica_private_ip", returnStdout: true).trim()
                     env.BASTION_IP = sh(script: "cd terraform && terraform output -raw bastion_public_ip", returnStdout: true).trim()
+                    env.REDIS_KEY_PATH = "terraform/redis_key.pem"
 
-                    // Generate dynamic inventory on the fly for Ansible
-                    writeFile file: 'ansible/inventory/hosts.ini', text: """
-[redis_master]
-${env.REDIS_MASTER_IP} ansible_user=ubuntu ansible_ssh_private_key_file=../terraform/redis_key.pem ansible_ssh_common_args='-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -J ubuntu@${env.BASTION_IP}'
-
-[redis_replica]
-${env.REDIS_REPLICA_IP} ansible_user=ubuntu ansible_ssh_private_key_file=../terraform/redis_key.pem ansible_ssh_common_args='-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -J ubuntu@${env.BASTION_IP}'
+                    // Generate dynamic inventory on the fly
+                    writeFile file: 'ansible/dynamic_inventory.yml', text: """
+all:
+  children:
+    redis_nodes:
+      hosts:
+        ${env.REDIS_MASTER_IP}:
+          ansible_user: ubuntu
+          ansible_ssh_private_key_file: ${env.REDIS_KEY_PATH}
+          ansible_ssh_common_args: '-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -J ubuntu@${env.BASTION_IP}'
+        ${env.REDIS_REPLICA_IP}:
+          ansible_user: ubuntu
+          ansible_ssh_private_key_file: ${env.REDIS_KEY_PATH}
+          ansible_ssh_common_args: '-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -J ubuntu@${env.BASTION_IP}'
 """
                 }
 
                 sh """
                     cd ansible
                     ansible-galaxy install -r requirements.yml --force
-                    ansible-playbook playbook.yml -i inventory/hosts.ini
+                    ansible-playbook -i dynamic_inventory.yml playbook.yml
                 """
             }
         }
 
         stage('Test Redis Connectivity') {
             steps {
-                echo "Testing Redis Master and Replica via Bastion..."
+                echo "Testing Redis Master and Replica..."
                 sh """
                     ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i terraform/redis_key.pem -J ubuntu@${BASTION_IP} ubuntu@${REDIS_MASTER_IP} redis-cli ping
                     ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i terraform/redis_key.pem -J ubuntu@${BASTION_IP} ubuntu@${REDIS_REPLICA_IP} redis-cli ping
