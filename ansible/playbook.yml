@@ -1,9 +1,8 @@
----
 - name: Install Redis Tools on all nodes
   hosts: all
   become: yes
   tasks:
-    - name: Install redis-tools
+    - name: Ensure redis-tools installed
       apt:
         name: redis-tools
         state: present
@@ -14,18 +13,9 @@
   become: yes
   roles:
     - geerlingguy.redis
-  vars:
-    redis_bind: "0.0.0.0"
-    redis_port: 6379
 
 - name: Install and configure Redis Replica
   hosts: redis_replica
   become: yes
   roles:
     - geerlingguy.redis
-  vars:
-    redis_bind: "0.0.0.0"
-    redis_port: 6379
-    redis_replication_role: "slave"
-    redis_master_host: "{{ hostvars[groups['redis_master'][0]].ansible_host }}"
-    redis_master_port: 6379
