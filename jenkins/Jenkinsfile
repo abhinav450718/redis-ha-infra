@@ -14,11 +14,17 @@ pipeline {
 
         stage('Terraform Apply') {
             steps {
-                withCredentials([usernamePassword(credentialsId: 'aws-creds', usernameVariable: 'AWS_ACCESS_KEY_ID', passwordVariable: 'AWS_SECRET_ACCESS_KEY')]) {
+                withCredentials([
+                    usernamePassword(
+                        credentialsId: 'aws-creds',
+                        usernameVariable: 'AWS_ACCESS_KEY_ID',
+                        passwordVariable: 'AWS_SECRET_ACCESS_KEY'
+                    )
+                ]) {
                     sh """
-                    cd terraform
-                    terraform init
-                    terraform apply -auto-approve
+                        cd terraform
+                        terraform init
+                        terraform apply -auto-approve
                     """
                 }
             }
@@ -27,9 +33,9 @@ pipeline {
         stage('Ansible Install Redis') {
             steps {
                 sh """
-                cd ansible
-                ansible-galaxy install -r requirements.yml
-                ansible-playbook playbook.yml
+                    cd ansible
+                    ansible-galaxy install -r requirements.yml
+                    ansible-playbook playbook.yml
                 """
             }
         }
@@ -37,8 +43,8 @@ pipeline {
         stage('Redis Test') {
             steps {
                 sh """
-                cd scripts
-                bash test_redis.sh
+                    cd scripts
+                    bash test_redis.sh
                 """
             }
         }
