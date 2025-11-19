@@ -1,15 +1,7 @@
-- hosts: all
+- name: Install and configure Redis on all nodes
+  hosts: all
+  gather_facts: yes
   become: yes
-  tasks:
-    - name: Update apt cache
-      apt:
-        update_cache: yes
 
-    - name: Install Redis tools
-      apt:
-        name: redis-tools
-        state: present
-
-    - name: Install Redis server (if master/replica)
-      include_role:
-        name: geerlingguy.redis
+  roles:
+    - geerlingguy.redis
