@@ -1,0 +1,46 @@
+pipeline {
+    agent any
+
+    environment {
+        AWS_REGION = "eu-east-1"
+    }
+
+    stages {
+        stage('Checkout Repo') {
+            steps {
+                git 'https://github.com/abhinav450718/redis-ha-infra.git'
+            }
+        }
+
+        stage('Terraform Apply') {
+            steps {
+                withCredentials([usernamePassword(credentialsId: 'aws-creds', usernameVariable: 'AWS_ACCESS_KEY_ID', passwordVariable: 'AWS_SECRET_ACCESS_KEY')]) {
+                    sh """
+                    cd terraform
+                    terraform init
+                    terraform apply -auto-approve
+                    """
+                }
+            }
+        }
+
+        stage('Ansible Install Redis') {
+            steps {
+                sh """
+                cd ansible
+                ansible-galaxy install -r requirements.yml
+                ansible-playbook playbook.yml
+                """
+            }
+        }
+
+        stage('Redis Test') {
+            steps {
+                sh """
+                cd scripts
+                bash test_redis.sh
+                """
+            }
+        }
+    }
+}
