@@ -22,11 +22,11 @@ pipeline {
                         passwordVariable: 'AWS_SECRET_ACCESS_KEY'
                     )
                 ]) {
-                    sh """
+                    sh '''
                         cd terraform
                         terraform init
                         terraform apply -auto-approve
-                    """
+                    '''
                 }
             }
         }
@@ -59,17 +59,17 @@ ansible_ssh_common_args='-o StrictHostKeyChecking=no -J ubuntu@${bastion_ip}'
 
         stage('Install Redis via Ansible') {
             steps {
-                sh """
+                sh '''
                     cd ansible
                     ansible-galaxy install -r requirements.yml
                     ansible-playbook playbook.yml -i inventory/hosts.ini
-                """
+                '''
             }
         }
 
         stage('Redis Test') {
             steps {
-                sh """
+                sh '''
                 echo "Testing Redis Master..."
                 MASTER_IP=$(cd terraform && terraform output -raw redis_master_private_ip)
                 ssh -o StrictHostKeyChecking=no -i terraform/redis_key.pem -J ubuntu@$(cd terraform && terraform output -raw bastion_public_ip) ubuntu@$MASTER_IP 'redis-cli ping'
@@ -77,7 +77,7 @@ ansible_ssh_common_args='-o StrictHostKeyChecking=no -J ubuntu@${bastion_ip}'
                 echo "Testing Redis Replica..."
                 REPLICA_IP=$(cd terraform && terraform output -raw redis_replica_private_ip)
                 ssh -o StrictHostKeyChecking=no -i terraform/redis_key.pem -J ubuntu@$(cd terraform && terraform output -raw bastion_public_ip) ubuntu@$REPLICA_IP 'redis-cli ping'
-                """
+                '''
             }
         }
     }
