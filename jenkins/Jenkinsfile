@@ -1,38 +1,58 @@
 pipeline {
-  agent any
+    agent any
 
-  environment {
-    TF_DIR = "terraform"
-    ANSIBLE_DIR = "ansible"
-  }
-
-  stages {
-    stage('Terraform Apply') {
-      steps {
-        dir("${TF_DIR}") {
-          sh 'terraform init'
-          sh 'terraform apply -auto-approve'
-          sh 'terraform output -raw ansible_inventory > ../ansible/inventory/hosts.json'
-        }
-      }
+    environment {
+        ANSIBLE_HOST_KEY_CHECKING = "False"
+        PRIVATE_KEY = "${WORKSPACE}/terraform/redis_key.pem"
+        BASTION_IP = "18.230.148.128"           // replace with terraform output if dynamic
+        REDIS_MASTER_IP = "10.0.1.169"
+        REDIS_REPLICA_IP = "10.0.2.31"
     }
 
-    stage('Install Redis') {
-      steps {
-        dir("${ANSIBLE_DIR}") {
-          sh 'ansible-galaxy install -r requirements.yml --force'
-          sh 'ansible-playbook -i inventory/hosts.json playbook.yml'
+    stages {
+
+        stage('Prepare Ansible') {
+            steps {
+                dir('ansible') {
+                    sh 'ansible-galaxy install -r requirements.yml --force'
+                }
+            }
         }
-      }
+
+        stage('Create Inventory') {
+            steps {
+                dir('ansible') {
+                    writeFile file: 'inventory/hosts.ini', text: """
+[bastion]
+${BASTION_IP} ansible_user=ubuntu ansible_ssh_private_key_file=../terraform/redis_key.pem
+
+[redis_master]
+${REDIS_MASTER_IP} ansible_user=ubuntu ansible_ssh_private_key_file=../terraform/redis_key.pem ansible_ssh_common_args='-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -J ubuntu@${BASTION_IP}'
+
+[redis_replica]
+${REDIS_REPLICA_IP} ansible_user=ubuntu ansible_ssh_private_key_file=../terraform/redis_key.pem ansible_ssh_common_args='-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -J ubuntu@${BASTION_IP}'
+"""
+                }
+            }
+        }
+
+        stage('Run Playbook') {
+            steps {
+                dir('ansible') {
+                    sh """
+                    ansible-playbook -i inventory/hosts.ini playbook.yml --private-key ${PRIVATE_KEY}
+                    """
+                }
+            }
+        }
     }
 
-    stage('Test Redis') {
-      steps {
-        dir("${ANSIBLE_DIR}") {
-          sh 'ansible -i inventory/hosts.json redis_master -m shell -a "redis-cli ping"'
-          sh 'ansible -i inventory/hosts.json redis_replica -m shell -a "redis-cli ping"'
+    post {
+        success {
+            echo '✅ Redis setup completed successfully!'
         }
-      }
+        failure {
+            echo '❌ Redis setup failed. Check logs.'
+        }
     }
-  }
 }
