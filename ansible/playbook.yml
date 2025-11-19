@@ -1,3 +1,4 @@
+---
 - name: Install and configure Redis Master
   hosts: redis_master
   become: yes
