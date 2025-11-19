@@ -1,0 +1,2 @@
+roles:
+  - name: geerlingguy.redis   # Most popular redis role
