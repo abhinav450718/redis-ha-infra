@@ -9,7 +9,7 @@ pipeline {
 
         stage('Checkout Repo') {
             steps {
-                git 'https://github.com/abhinav450718/redis-ha-infra.git'
+                git branch: 'main', url: 'https://github.com/abhinav450718/redis-ha-infra.git'
             }
         }
 
