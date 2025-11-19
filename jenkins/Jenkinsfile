@@ -51,7 +51,7 @@ ${replica_ip}
 [all:vars]
 ansible_user=ubuntu
 ansible_ssh_private_key_file=../terraform/redis_key.pem
-ansible_ssh_common_args='-o StrictHostKeyChecking=no -J ubuntu@${bastion_ip}'
+ansible_ssh_common_args='-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -J ubuntu@${bastion_ip}'
 """
                 }
             }
@@ -61,7 +61,7 @@ ansible_ssh_common_args='-o StrictHostKeyChecking=no -J ubuntu@${bastion_ip}'
             steps {
                 sh '''
                     cd ansible
-                    ansible-galaxy install -r requirements.yml
+                    ansible-galaxy install -r requirements.yml --force
                     ansible-playbook playbook.yml -i inventory/hosts.ini
                 '''
             }
@@ -69,15 +69,21 @@ ansible_ssh_common_args='-o StrictHostKeyChecking=no -J ubuntu@${bastion_ip}'
 
         stage('Redis Test') {
             steps {
-                sh '''
-                echo "Testing Redis Master..."
-                MASTER_IP=$(cd terraform && terraform output -raw redis_master_private_ip)
-                ssh -o StrictHostKeyChecking=no -i terraform/redis_key.pem -J ubuntu@$(cd terraform && terraform output -raw bastion_public_ip) ubuntu@$MASTER_IP 'redis-cli ping'
+                script {
+                    def master_ip  = sh(script: "cd terraform && terraform output -raw redis_master_private_ip", returnStdout: true).trim()
+                    def replica_ip = sh(script: "cd terraform && terraform output -raw redis_replica_private_ip", returnStdout: true).trim()
+                    def bastion_ip = sh(script: "cd terraform && terraform output -raw bastion_public_ip", returnStdout: true).trim()
 
-                echo "Testing Redis Replica..."
-                REPLICA_IP=$(cd terraform && terraform output -raw redis_replica_private_ip)
-                ssh -o StrictHostKeyChecking=no -i terraform/redis_key.pem -J ubuntu@$(cd terraform && terraform output -raw bastion_public_ip) ubuntu@$REPLICA_IP 'redis-cli ping'
-                '''
+                    sh """
+                    echo 'Testing Redis Master...'
+                    ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+                        -i terraform/redis_key.pem -J ubuntu@${bastion_ip} ubuntu@${master_ip} 'redis-cli ping'
+
+                    echo 'Testing Redis Replica...'
+                    ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+                        -i terraform/redis_key.pem -J ubuntu@${bastion_ip} ubuntu@${replica_ip} 'redis-cli ping'
+                    """
+                }
             }
         }
     }
