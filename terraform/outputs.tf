@@ -33,4 +33,3 @@ output "redis_cli_master" {
 output "redis_cli_replica" {
   value = "redis-cli -h ${module.redis_replica.private_ip} -p 6379"
 }
-
