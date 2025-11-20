@@ -1,0 +1,5 @@
+bind {{ redis_bind }}
+port {{ redis_port }}
+replicaof {{ redis_replicaof }} {{ redis_port }}
+daemonize yes
+protected-mode no
