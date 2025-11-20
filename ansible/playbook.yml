@@ -1,0 +1,8 @@
+---
+- name: Setup Redis Cluster
+  hosts:
+    - redis_master
+    - redis_replica
+  become: yes
+  roles:
+    - geerlingguy.redis
