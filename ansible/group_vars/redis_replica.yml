@@ -1,4 +1,0 @@
-# Redis Replica config
-redis_bind: 0.0.0.0
-redis_port: 6379
-replicaof: "{{ hostvars['redis_master']['ansible_host'] }} 6379"

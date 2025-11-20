@@ -1,7 +1,0 @@
----
-redis_bind: "0.0.0.0"
-redis_port: 6379
-redis_password: ""
-redis_master_ip: "{{ hostvars['redis_master'].ansible_host }}"
-redis_replicaof: "{{ hostvars['redis_master'].ansible_host }}"
-redis_conf_file: "/etc/redis/redis.conf"

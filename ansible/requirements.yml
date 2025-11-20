@@ -1,5 +1,0 @@
-# ansible/requirements.yml
----
-roles:
-  - name: geerlingguy.redis
-    version: 1.9.1
