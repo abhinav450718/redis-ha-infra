@@ -39,19 +39,19 @@ pipeline {
                     def bastion_ip = sh(script: "cd terraform && terraform output -raw bastion_public_ip",       returnStdout: true).trim()
 
                     writeFile file: "ansible/inventory/hosts.ini", text: """
-[bastion]
-${bastion_ip}
-
 [redis_master]
 ${master_ip}
 
 [redis_replica]
 ${replica_ip}
 
+[bastion]
+${bastion_ip}
+
 [all:vars]
 ansible_user=ubuntu
 ansible_ssh_private_key_file=../terraform/redis_key.pem
-ansible_ssh_common_args='-o StrictHostKeyChecking=no -J ubuntu@${bastion_ip}'
+ansible_ssh_common_args=-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -J ubuntu@${bastion_ip}
 """
                 }
             }
@@ -70,15 +70,26 @@ ansible_ssh_common_args='-o StrictHostKeyChecking=no -J ubuntu@${bastion_ip}'
         stage('Redis Test') {
             steps {
                 sh '''
-                echo "Testing Redis Master..."
                 MASTER_IP=$(cd terraform && terraform output -raw redis_master_private_ip)
-                ssh -o StrictHostKeyChecking=no -i terraform/redis_key.pem -J ubuntu@$(cd terraform && terraform output -raw bastion_public_ip) ubuntu@$MASTER_IP 'redis-cli ping'
+                REPLICA_IP=$(cd terraform && terraform output -raw redis_replica_private_ip)
+                BASTION_IP=$(cd terraform && terraform output -raw bastion_public_ip)
+
+                echo "Testing Redis Master..."
+                ssh -o StrictHostKeyChecking=no -i terraform/redis_key.pem -J ubuntu@$BASTION_IP ubuntu@$MASTER_IP 'redis-cli ping'
 
                 echo "Testing Redis Replica..."
-                REPLICA_IP=$(cd terraform && terraform output -raw redis_replica_private_ip)
-                ssh -o StrictHostKeyChecking=no -i terraform/redis_key.pem -J ubuntu@$(cd terraform && terraform output -raw bastion_public_ip) ubuntu@$REPLICA_IP 'redis-cli ping'
+                ssh -o StrictHostKeyChecking=no -i terraform/redis_key.pem -J ubuntu@$BASTION_IP ubuntu@$REPLICA_IP 'redis-cli ping'
                 '''
             }
+        }
+    }
+
+    post {
+        always {
+            echo "Pipeline finished. Check Terraform, Ansible, and SSH logs for details."
+        }
+        failure {
+            echo "Pipeline failed. Inspect Terraform, Ansible, and connectivity steps."
         }
     }
 }
