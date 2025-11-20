@@ -2,90 +2,83 @@ pipeline {
     agent any
 
     environment {
-        AWS_REGION = 'sa-east-1'
-        AWS_CREDENTIALS = 'aws-creds'          // Jenkins AWS credentials ID
-        ANSIBLE_PRIVATE_KEY = 'aws-redis-key' // Jenkins SSH private key ID
+        AWS_REGION = "sa-east-1"
     }
 
     stages {
 
         stage('Checkout Repo') {
             steps {
-                git branch: 'main', url: 'https://github.com/abhinav450718/redis-ha-infra.git', credentialsId: "${AWS_CREDENTIALS}"
+                git branch: 'main', url: 'https://github.com/abhinav450718/redis-ha-infra.git'
             }
         }
 
         stage('Terraform Apply') {
             steps {
-                withCredentials([[$class: 'AmazonWebServicesCredentialsBinding', credentialsId: "${AWS_CREDENTIALS}"]]) {
-                    dir('terraform') {
-                        sh 'terraform init'
-                        sh 'terraform apply -auto-approve'
-                    }
+                withCredentials([
+                    usernamePassword(
+                        credentialsId: 'aws-creds',
+                        usernameVariable: 'AWS_ACCESS_KEY_ID',
+                        passwordVariable: 'AWS_SECRET_ACCESS_KEY'
+                    )
+                ]) {
+                    sh '''
+                        cd terraform
+                        terraform init
+                        terraform apply -auto-approve
+                    '''
                 }
             }
         }
 
-        stage('Generate Dynamic Ansible Inventory and Vars') {
+        stage('Generate Ansible Inventory from Terraform Output') {
             steps {
-                dir('terraform') {
-                    script {
-                        def redis_master_ip = sh(script: 'terraform output -raw redis_master_private_ip', returnStdout: true).trim()
-                        def redis_replica_ip = sh(script: 'terraform output -raw redis_replica_private_ip', returnStdout: true).trim()
-                        def bastion_ip = sh(script: 'terraform output -raw bastion_public_ip', returnStdout: true).trim()
+                script {
+                    def master_ip  = sh(script: "cd terraform && terraform output -raw redis_master_private_ip",  returnStdout: true).trim()
+                    def replica_ip = sh(script: "cd terraform && terraform output -raw redis_replica_private_ip", returnStdout: true).trim()
+                    def bastion_ip = sh(script: "cd terraform && terraform output -raw bastion_public_ip",       returnStdout: true).trim()
 
-                        writeFile file: '../ansible/inventory/hosts.ini', text: """
+                    writeFile file: "ansible/inventory/hosts.ini", text: """
+[bastion]
+${bastion_ip}
+
 [redis_master]
-${redis_master_ip} ansible_user=ubuntu ansible_ssh_common_args='-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -J ubuntu@${bastion_ip}'
+${master_ip}
 
 [redis_replica]
-${redis_replica_ip} ansible_user=ubuntu ansible_ssh_common_args='-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -J ubuntu@${bastion_ip}'
-"""
+${replica_ip}
 
-                        writeFile file: '../ansible/group_vars/all.yml', text: """
-redis_master_ip: ${redis_master_ip}
-redis_replica_ip: ${redis_replica_ip}
-redis_port: 6379
+[all:vars]
+ansible_user=ubuntu
+ansible_ssh_private_key_file=../terraform/redis_key.pem
+ansible_ssh_common_args='-o StrictHostKeyChecking=no -J ubuntu@${bastion_ip}'
 """
-                    }
                 }
             }
         }
 
         stage('Install Redis via Ansible') {
             steps {
-                withCredentials([sshUserPrivateKey(credentialsId: "${ANSIBLE_PRIVATE_KEY}", keyFileVariable: 'KEYFILE', usernameVariable: 'SSHUSER')]) {
-                    dir('ansible') {
-                        sh 'ansible-galaxy install -r requirements.yml --force'
-                        sh "ANSIBLE_HOST_KEY_CHECKING=False ansible-playbook playbook.yml -i inventory/hosts.ini --private-key $KEYFILE"
-                    }
-                }
+                sh '''
+                    cd ansible
+                    ansible-galaxy install -r requirements.yml
+                    ansible-playbook playbook.yml -i inventory/hosts.ini
+                '''
             }
         }
 
-        stage('Test Redis Connectivity via Bastion') {
+        stage('Redis Test') {
             steps {
-                dir('terraform') {
-                    script {
-                        def redis_master_ip = sh(script: 'terraform output -raw redis_master_private_ip', returnStdout: true).trim()
-                        def redis_replica_ip = sh(script: 'terraform output -raw redis_replica_private_ip', returnStdout: true).trim()
-                        def bastion_ip = sh(script: 'terraform output -raw bastion_public_ip', returnStdout: true).trim()
+                sh '''
+                echo "Testing Redis Master..."
+                MASTER_IP=$(cd terraform && terraform output -raw redis_master_private_ip)
+                ssh -o StrictHostKeyChecking=no -i terraform/redis_key.pem -J ubuntu@$(cd terraform && terraform output -raw bastion_public_ip) ubuntu@$MASTER_IP 'redis-cli ping'
 
-                        sh "ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i ../ansible/redis_key.pem -J ubuntu@${bastion_ip} ubuntu@${redis_master_ip} 'redis-cli ping'"
-                        sh "ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -i ../ansible/redis_key.pem -J ubuntu@${bastion_ip} ubuntu@${redis_replica_ip} 'redis-cli ping'"
-                    }
-                }
+                echo "Testing Redis Replica..."
+                REPLICA_IP=$(cd terraform && terraform output -raw redis_replica_private_ip)
+                ssh -o StrictHostKeyChecking=no -i terraform/redis_key.pem -J ubuntu@$(cd terraform && terraform output -raw bastion_public_ip) ubuntu@$REPLICA_IP 'redis-cli ping'
+                '''
             }
-        }
-
-    }
-
-    post {
-        always {
-            echo 'Pipeline finished. Check Terraform, Ansible, and SSH logs for details.'
-        }
-        failure {
-            echo 'Pipeline failed. Inspect Terraform, Ansible, and connectivity steps.'
         }
     }
 }
