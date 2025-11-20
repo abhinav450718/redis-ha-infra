@@ -36,23 +36,17 @@ pipeline {
                 script {
                     def master_ip  = sh(script: "cd terraform && terraform output -raw redis_master_private_ip", returnStdout: true).trim()
                     def replica_ip = sh(script: "cd terraform && terraform output -raw redis_replica_private_ip", returnStdout: true).trim()
-                    def bastion_ip = sh(script: "cd terraform && terraform output -raw bastion_public_ip",       returnStdout: true).trim()
+                    def bastion_ip = sh(script: "cd terraform && terraform output -raw bastion_public_ip", returnStdout: true).trim()
 
                     writeFile file: "ansible/inventory/hosts.ini", text: """
 [bastion]
 ${bastion_ip} ansible_user=ubuntu ansible_ssh_private_key_file=../terraform/redis_key.pem ansible_python_interpreter=/usr/bin/python3
 
 [redis_master]
-${master_ip} ansible_user=ubuntu ansible_ssh_private_key_file=../terraform/redis_key.pem \
-ansible_ssh_common_args='-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
--o ProxyCommand="ssh -i ../terraform/redis_key.pem -W %h:%p ubuntu@${bastion_ip}"' \
-ansible_python_interpreter=/usr/bin/python3
+${master_ip} ansible_user=ubuntu ansible_ssh_private_key_file=../terraform/redis_key.pem ansible_ssh_common_args='-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ProxyCommand="ssh -i ../terraform/redis_key.pem -W %h:%p ubuntu@${bastion_ip}"' ansible_python_interpreter=/usr/bin/python3
 
 [redis_replica]
-${replica_ip} ansible_user=ubuntu ansible_ssh_private_key_file=../terraform/redis_key.pem \
-ansible_ssh_common_args='-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
--o ProxyCommand="ssh -i ../terraform/redis_key.pem -W %h:%p ubuntu@${bastion_ip}"' \
-ansible_python_interpreter=/usr/bin/python3
+${replica_ip} ansible_user=ubuntu ansible_ssh_private_key_file=../terraform/redis_key.pem ansible_ssh_common_args='-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ProxyCommand="ssh -i ../terraform/redis_key.pem -W %h:%p ubuntu@${bastion_ip}"' ansible_python_interpreter=/usr/bin/python3
 """
                 }
             }
@@ -62,9 +56,7 @@ ansible_python_interpreter=/usr/bin/python3
             steps {
                 sh '''
                     cd ansible
-                    # Install roles dynamically
                     ansible-galaxy install -r requirements.yml --force
-                    # Run playbook with explicit inventory
                     ansible-playbook playbook.yml -i inventory/hosts.ini
                 '''
             }
@@ -75,15 +67,15 @@ ansible_python_interpreter=/usr/bin/python3
                 script {
                     def master_ip  = sh(script: "cd terraform && terraform output -raw redis_master_private_ip", returnStdout: true).trim()
                     def replica_ip = sh(script: "cd terraform && terraform output -raw redis_replica_private_ip", returnStdout: true).trim()
-                    def bastion_ip = sh(script: "cd terraform && terraform output -raw bastion_public_ip",       returnStdout: true).trim()
+                    def bastion_ip = sh(script: "cd terraform && terraform output -raw bastion_public_ip", returnStdout: true).trim()
 
                     echo "Testing Redis Master and Replica via Bastion..."
                     sh """
-                    ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
-                        -i terraform/redis_key.pem -J ubuntu@${bastion_ip} ubuntu@${master_ip} 'redis-cli ping'
+                        ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+                            -i terraform/redis_key.pem -J ubuntu@${bastion_ip} ubuntu@${master_ip} 'redis-cli ping'
 
-                    ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
-                        -i terraform/redis_key.pem -J ubuntu@${bastion_ip} ubuntu@${replica_ip} 'redis-cli ping'
+                        ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+                            -i terraform/redis_key.pem -J ubuntu@${bastion_ip} ubuntu@${replica_ip} 'redis-cli ping'
                     """
                 }
             }
