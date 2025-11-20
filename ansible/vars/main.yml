@@ -1,7 +1,0 @@
-# vars/main.yml
-redis_package: redis-server           # Package name to install
-redis_package_state: present          # Ensure it is installed
-redis_apt_update_cache: yes           # Update apt cache before installation
-redis_use_pip: false                   # Don’t use pip for installation
-redis_enable: yes                     # Ensure service is enabled
-redis_version: latest                 # Install the latest version
